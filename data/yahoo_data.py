@@ -1,6 +1,12 @@
 import yfinance as yf
 import pandas as pd
 
+# Get symbols for smp500 companies
+smp500 = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")[0]
+smp500["Symbol"] = smp500["Symbol"].str.replace(".", "-")
+symbol_list = smp500["Symbol"].unique().tolist()
+
+
 def get_historical_data(symbol, start="2022-01-01", end="2025-01-01", interval="1d"):
     df = yf.download(symbol, start=start, end=end, interval=interval)
     df.dropna(inplace=True)
@@ -8,5 +14,6 @@ def get_historical_data(symbol, start="2022-01-01", end="2025-01-01", interval="
 
 # Example
 if __name__ == "__main__":
-    df = get_historical_data("AAPL", "2023-01-01", "2025-01-01")
-    print(df.tail())
+    #df = get_historical_data("AAPL", "2023-01-01", "2025-01-01")
+    #print(df.tail())
+    print(symbol_list)
