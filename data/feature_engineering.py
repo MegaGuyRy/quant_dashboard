@@ -1,10 +1,16 @@
 import pandas as pd
+import numpy as np
 
 def compute_return_features(df):
     df = compute_lagging_return(df)
     df = compute_ma_features(df)
     df = compute_rsi(df)
     df = compute_volatility_features(df)
+    df = compute_garman_klass(df)
+    df = compute_bollinger_bands(df)
+    df = compute_atr(df)
+    df = comute_macd(df)
+    df = compute_dollar_volume(df)
     df.dropna(inplace=True)
     return df
 
@@ -58,8 +64,56 @@ def compute_volatility_features(df):
 	
 	return df
 
+def compute_garman_klass(df):
+    """
+	Compute robust estimate of volatility than std dev for the dataframe.
+	Assumes df has a daily 'high/low/open/close' column and is indexed by date.
+	"""
+    log_hl = np.log(df['High'] / df['Low'])
+    log_co = np.log(df['Close'] / df['Open'])
+    df['gk_vol'] = np.sqrt(0.5 * log_hl**2 - (2*np.log(2)-1) * log_co**2)
+    return df
+
+def compute_bollinger_bands(df, period=22):
+    """
+	Compute Bollinger Bands / %B features for the dataframe.
+	Assumes df has a 'Close' column and is indexed by date.
+    """
+    ma = df['Close'].rolling(period).mean() # rolling mean
+    std = df['Close'].rolling(period).mean() # rolling std/volatility
+    upper = ma + 2 * std # upper is 2 std above
+    lower = ma - 2 * std # lower is 2 std below
+    df['bollinger_b'] = (df['Close'] - lower) / (upper - lower + 1e-6)
+    return df
+
+def compute_atr(df, period=14):
+    high_low = df['High'] - df['Low']
+    high_close_prev = (df['High'] - df['Close'].shift()).abs()
+    low_close_prev = (df['Low'] - df['Close'].shift()).abs()
+    tr = pd.concat([high_low, high_close_prev, low_close_prev], axis=1).max(axis=1) # true range
+    df['atr'] = tr.rolling(period).mean()
+    return df
+    
+def comute_macd(df):
+    # could use slider or custom spans
+    # 9 & 21 on hourly
+    """
+	Compute MACD for the dataframe.
+	Assumes df has a 'Close' column and is indexed by date.
+    """
+    ema_12 = df['Close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['Close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = ema_12 - ema_26
+    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+    return df
+    
+def compute_dollar_volume(df):
+    df['dollar_volume'] = df['Close'] * df['Volume']
+    return df
+
 if __name__ == "__main__":
     from yahoo_data import get_historical_data
     df = get_historical_data("AAPL", start="2022-01-01", end="2025-01-01")
     df = compute_return_features(df)
     print(df.tail())
+
