@@ -16,5 +16,6 @@ def get_historical_data(symbol, start="2022-01-01", end="2025-01-01", interval="
 # Example
 if __name__ == "__main__":
     df = get_historical_data("AAPL", "2023-01-01", "2025-01-01")
-    print(df.tail())
+    dfa = df['Close']
+    print(dfa.tail())
     #print(symbol_list)
