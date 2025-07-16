@@ -111,9 +111,35 @@ def compute_dollar_volume(df):
     df['dollar_volume'] = df['Close'] * df['Volume']
     return df
 
+def create_dataframe(stock_list=["AAPL", "GOOGL"], start="2022-01-01", end="2025-01-01"):
+    from data.yahoo_data import get_historical_data
+    all_data = pd.DataFrame()
+    for t in stock_list:
+        try:
+            df = get_historical_data(t, start="2022-01-01", end="2025-01-01")
+            if isinstance(df.columns, pd.MultiIndex):
+                df = compute_return_features(df)
+                ticker = df.columns.levels[1][0]
+                df['Symbol'] = ticker
+                df.columns = df.columns.droplevel(1)
+            else:
+                df['Symbol'] = t
+            
+            df.reset_index(inplace=True)
+            
+            all_data = pd.concat([all_data, df], ignore_index=True)
+            
+            print(f"Processed {t}")
+        except Exception as e:
+            print(f"Failed for {t}: {e}")
+    all_data['Date'] = pd.to_datetime(all_data['Date'])
+    all_data = all_data.sort_values(by='Date')
+    return(all_data)
+    
+    
 if __name__ == "__main__":
     from data.yahoo_data import get_historical_data
-    stock_list = ["AAPL"]
+    stock_list = ["AAPL", "GOOGL"]
     all_data = pd.DataFrame()
     for t in stock_list:
         try:
