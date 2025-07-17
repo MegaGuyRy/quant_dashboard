@@ -124,8 +124,13 @@ def close_all_positions():
 if __name__ == "__main__":
     # python -m trading.alpaca logs/ticker_predictions_{todays_date}.csv --diversity 20
     # python -m trading.alpaca --monitor --tp 0.1 --sl 0.02 --interval 10
+    # python -m trading.alpaca --diversity 20 --monitor --tp 0.1 --sl 0.05 --interval 10
+
+    
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    default_csv_path = f"logs/feature_df_{today_str}.csv"
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ranking_csv", type=str, default="logs/ticker_model_predictions.csv", help="Path to predictions CSV")
+    parser.add_argument("--ranking_csv", type=str, default=default_csv_path, help="Path to predictions CSV")
     parser.add_argument("--diversity", type=int, default=20, help="Top N stocks to allocate across")
     parser.add_argument("--monitor", action="store_true", help="Enable monitoring mode")
     parser.add_argument("--tp", type=float, default=0.10, help="Take profit threshold (e.g., 0.1 for 10%)")
@@ -139,11 +144,11 @@ if __name__ == "__main__":
     check_account()
     get_positions()
     
-    if args.monitor:
-        monitor_positions(take_profit=args.tp, stop_loss=args.sl, interval=args.interval)
-    else:
-        allocate_portfolio(args.ranking_csv, args.diversity)
     if args.close_all:
         close_all_positions()
         exit()
 
+    if args.monitor:
+        monitor_positions(take_profit=args.tp, stop_loss=args.sl, interval=args.interval)
+    else:
+        allocate_portfolio(args.ranking_csv, args.diversity)

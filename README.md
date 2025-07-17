@@ -6,6 +6,7 @@
 - Setup live paper trading through ALPACA API
     - Selling positions (more strategy)
     - automate re-entering positions (maybe check other rankings and eval)
+    - code around pattern day trading protection
     
 - Backtesting and result eval with streamlit Dashboard
     - Compare agaenst NASDAC 

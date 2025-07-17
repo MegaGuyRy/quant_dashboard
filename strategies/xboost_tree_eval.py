@@ -5,7 +5,7 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 import joblib
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from data.feature_engineering import create_dataframe
 
 def smp500_df(start_date="2022-01-01", end_date="2025-01-01", use_csv=True):
@@ -112,6 +112,7 @@ def train_tree_eval(df):
     
     
 if __name__ == "__main__":
+# Use in morning before market open to generate all needed files
 # python -m strategies.xboost_tree_eval --use_csv False --start_date 2022-01-01 --end_date yesterday
 
     parser = argparse.ArgumentParser()
