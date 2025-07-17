@@ -110,6 +110,16 @@ def monitor_positions(take_profit=0.10, stop_loss=0.05, interval=5):
         time.sleep(interval)
 
 
+def close_all_positions():
+    print("\nClosing all open positions...\n")
+    positions = api.list_positions()
+    for p in positions:
+        try:
+            qty = int(float(p.qty))
+            place_market_order(p.symbol, qty, side="sell")
+        except Exception as e:
+            print(f"Error closing {p.symbol}: {e}")
+
 
 if __name__ == "__main__":
     # python -m trading.alpaca logs/ticker_predictions_{todays_date}.csv --diversity 20
@@ -121,6 +131,8 @@ if __name__ == "__main__":
     parser.add_argument("--tp", type=float, default=0.10, help="Take profit threshold (e.g., 0.1 for 10%)")
     parser.add_argument("--sl", type=float, default=0.05, help="Stop loss threshold (e.g., 0.05 for 5%)")
     parser.add_argument("--interval", type=int, default=300, help="Check interval in seconds")
+    # python -m trading.alpaca --close_all
+    parser.add_argument("--close_all", action="store_true", help="Close all open positions immediately")
 
     args = parser.parse_args()
 
@@ -131,4 +143,7 @@ if __name__ == "__main__":
         monitor_positions(take_profit=args.tp, stop_loss=args.sl, interval=args.interval)
     else:
         allocate_portfolio(args.ranking_csv, args.diversity)
+    if args.close_all:
+        close_all_positions()
+        exit()
 
