@@ -105,20 +105,27 @@ def train_tree_eval(df):
     # Return predictions and scores as a summary dataframe
     results_df = pd.DataFrame(results).sort_values(by="PredictedReturn", ascending=False)
     results_df.to_csv("logs/ticker_model_predictions.csv", index=False)
-    print("\n saved prediction ranking to logs/ticker_model_predictions.csv")
+    now = datetime.now()
+    timestamp = now.strftime("%Y-%m-%d")
+    print(f"\n saved prediction ranking to logs/ticker_predictions_{timestamp}.csv")
     return results_df
     
     
 if __name__ == "__main__":
-# python -m strategies.xboost_tree_eval --use_csv False --start_date 2022-01-01 --end_date 2025-01-01
+# python -m strategies.xboost_tree_eval --use_csv False --start_date 2022-01-01 --end_date yesterday
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--use_csv", type=lambda x: x.lower() == 'true', default=True,
                         help="True to load today's CSV from logs/, False to pull fresh data")
+    #parser.add_argument("--horizon", type=int, default=1, help="Number of days ahead to predict (e.g., 1 for next day)")
     parser.add_argument("--start_date", type=str, default="2022-01-01")
     parser.add_argument("--end_date", type=str, default="2025-01-01")
     args = parser.parse_args()
+    
+    # Handle keyword 'yesterday'
+    if args.end_date.lower() == "yesterday":
+        args.end_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 
     df = smp500_df(start_date=args.start_date, end_date=args.end_date, use_csv=args.use_csv)
     train_tree_eval(df)
-
+    
