@@ -10,7 +10,7 @@ def get_sp500_symbols():
     return symbol_list
 
 
-def get_historical_data(symbol, start="2022-01-01", end="2025-01-01", interval="1d"):
+def get_historical_data(symbol, start="2022-01-01", end="2025-01-01", interval="1d", auto_adjust=False):
     df = yf.download(symbol, start=start, end=end, interval=interval)
     df.dropna(inplace=True)
     return df
