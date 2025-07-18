@@ -55,11 +55,11 @@ def retrieve_data(start_date="2022-01-01", end_date="2025-01-01"):
     print(f"[INFO] Saved combined data to {file_path}")
     return (df)
     
-def train_xgboost_model(n_trees):
+def train_xgboost_model(n_trees=100, horizon=1):
     """
     Step 2: Train XGBoost models on latest data
     n_trees: number of trees in forest
-    Run: python app.py train_xgboost_model --n_trees 100
+    Run: python app.py train_xgboost_model --n_trees 100 --horizon=1
     """
     timestamp = cur_date()
     file_path = f"logs/features/feature_df_{timestamp}.csv"
@@ -70,10 +70,10 @@ def train_xgboost_model(n_trees):
         df = pd.read_csv(file_path)
         train_models(df, n_trees)
     
-def xgboost_eval():
+def xgboost_eval(horizon=1):
     """
     Step 3: Evaluate XGBoost models on latest data
-    Run: python app.py xgboost_eval
+    Run: python app.py xgboost_eval --horizon=1
     """
     timestamp = cur_date()
     file_path = f"logs/features/feature_df_{timestamp}.csv"
@@ -137,6 +137,7 @@ if __name__ == "__main__":
     parser.add_argument("--start_date", type=str, default="2022-01-01")
     parser.add_argument("--end_date", type=str, default="2025-01-01")
     parser.add_argument("--n_trees", type=int, default=100)
+    parser.add_argument("--horizon", type=int, default=1)
     parser.add_argument("--diversity", type=int, default=20)
     parser.add_argument("--API_KEY", type=str, default="2025-01-01")
     parser.add_argument("--ALPACA_API_KEY", type=str, default="ALPACA_API_KEY")
@@ -150,7 +151,7 @@ if __name__ == "__main__":
     if args.command == "retrieve_data":
         retrieve_data(start_date=args.start_date, end_date=args.end_date)
     elif args.command == "train_xgboost_model":
-        train_xgboost_model(n_trees=100)
+        train_xgboost_model(n_trees=100, horizon=1)
     elif args.command == "xgboost_eval":
         xgboost_eval()
     elif args.command == "trade":

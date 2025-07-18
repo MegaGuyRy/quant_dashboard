@@ -5,7 +5,6 @@
 
 ### TODO:
 - Improve decision making
-    
 - Setup live paper trading through ALPACA API
     - Selling positions (more strategy)
     - code around pattern day trading protection
@@ -17,7 +16,7 @@
 - Update Xboost_eval with the ability to choose the horizon
 
 ### Future changes:
-- daily, monthly, yearly returns if applicable
+- daily, weekly, monthly, yearly returns if applicable
 - Tie it all together in app.py, make it pass all at once
 - Backtesting mode – We could add a command to backtest using stored predictions vs actuals.
 - Unit test hooks – We could expose these as functions for easier unit testing.
