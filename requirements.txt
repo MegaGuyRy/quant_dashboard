@@ -11,3 +11,6 @@ requests==2.31.0
 sqlalchemy==2.0.30
 websocket-client==1.7.0
 lmxl
+xgboost
+joblib
+python-dotenv
