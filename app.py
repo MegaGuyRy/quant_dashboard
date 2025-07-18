@@ -3,6 +3,8 @@ import argparse
 import os
 from datetime import datetime, timedelta
 import pandas as pd
+from alpaca_trade_api.rest import REST
+from dotenv import load_dotenv
 
 from data.yahoo_data import get_historical_data, get_sp500_symbols
 from data.feature_engineering import compute_return_features
@@ -94,18 +96,44 @@ def trade(diversity)
     else:
         ranking_csv = pd.read_csv(file_path)
         allocate_portfolio(ranking_csv, diversity)
-        
+
+def close_all():
+    """
+    Used to close positions at at BOD or EOD (currently manual)
+    Run: python app.py close_all_positions
+    """
+    positions = api.list_positions()
+    if not positions:
+        print("[INFO] No open positions to close.")
+        return
+
+    print("[WARNING] The following positions will be closed:")
+    for pos in positions:
+        print(f" - {pos.symbol}: {pos.qty} shares")
+
+    confirm = input("Are you sure you want to close ALL positions? Type 'YES' to confirm: ")
+    if confirm == "YES":
+        api.close_all_positions()
+        print("[INFO] All positions have been closed.")
+    else:
+        print("[CANCELLED] No positions were closed.")
+
 
 if __name__ == "__main__":
     
     # Load .env variables
     load_dotenv()
-    ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
-    ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
-    ALPACA_BASE_URL = os.getenv("ALPACA_BASE_URL")
+    api = REST(
+        os.getenv("ALPACA_API_KEY"),
+        os.getenv("ALPACA_SECRET_KEY"),
+        os.getenv("ALPACA_BASE_URL")
+    )
+
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["retrieve_data", "train_xgboost_model", "xgboost_eval", "trade", "monitor"], help="Which step to run")
+    parser.add_argument("command", choices=["retrieve_data", "train_xgboost_model", "xgboost_eval", 
+                                            "trade", "monitor", "close_all"], 
+                                            help="Which step to run")
     parser.add_argument("--start_date", type=str, default="2022-01-01")
     parser.add_argument("--end_date", type=str, default="2025-01-01")
     parser.add_argument("--n_trees", type=int, default=100)
@@ -129,4 +157,5 @@ if __name__ == "__main__":
         trade(diversity=args.diversity, API_KEY=ALPACA_API_KEY, ALPACA_SECRET_KEY=ALPACA_SECRET_KEY, ALPACA_BASE_URL=ALPACA_BASE_URL)
     elif args.command == "monitor":
         monitor(tp=args.tp, sl=args.sl, API_KEY=ALPACA_API_KEY, ALPACA_SECRET_KEY=ALPACA_SECRET_KEY, ALPACA_BASE_URL=ALPACA_BASE_URL)
-
+    elif args.command == "close_all":
+        close_all()

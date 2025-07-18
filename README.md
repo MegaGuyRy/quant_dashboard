@@ -4,7 +4,7 @@
 
 
 ### TODO:
-- Imrpove decision making
+- Improve decision making
     
 - Setup live paper trading through ALPACA API
     - Selling positions (more strategy)
@@ -13,13 +13,12 @@
 - Backtesting and result eval with streamlit Dashboard
     - Compare agaenst NASDAC 
     - live trades made today window
-    - daily, monthly, yearly returns if applicable
 
 - Update Xboost_eval with the ability to choose the horizon
 
 ### Future changes:
+- daily, monthly, yearly returns if applicable
 - Tie it all together in app.py, make it pass all at once
-- implement a close all command in app.oy
 - show model eval stats when saving them
 - Backtesting mode – We could add a command to backtest using stored predictions vs actuals.
 - Unit test hooks – We could expose these as functions for easier unit testing.
