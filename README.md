@@ -19,7 +19,6 @@
 ### Future changes:
 - daily, monthly, yearly returns if applicable
 - Tie it all together in app.py, make it pass all at once
-- show model eval stats when saving them
 - Backtesting mode – We could add a command to backtest using stored predictions vs actuals.
 - Unit test hooks – We could expose these as functions for easier unit testing.
 - Add logging (optional) – Replace or supplement print() statements with Python’s logging module for more control.

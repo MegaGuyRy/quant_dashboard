@@ -83,7 +83,7 @@ def xgboost_eval():
         df = pd.read_csv(file_path)
         results = evaluate_models(df)
         
-def trade(diversity)
+def trade(diversity):
     """
     Step 4: Make trades based on todays ticker_model_predictions csv
     diversity: amount of stocks to spread buying power between
@@ -111,8 +111,8 @@ def close_all():
     for pos in positions:
         print(f" - {pos.symbol}: {pos.qty} shares")
 
-    confirm = input("Are you sure you want to close ALL positions? Type 'YES' to confirm: ")
-    if confirm == "YES":
+    confirm = input("Are you sure you want to close ALL positions? Type 'YES' to confirm else will cancel: ")
+    if confirm == "Y":
         api.close_all_positions()
         print("[INFO] All positions have been closed.")
     else:
