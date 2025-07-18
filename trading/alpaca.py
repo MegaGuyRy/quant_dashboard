@@ -49,11 +49,11 @@ def allocate_portfolio(ranking_csv, diversity):
     # Get buying power
     account = api.get_account()
     buying_power = float(account.buying_power)
-
+    print(df.columns)
     # Normalize weights from predicted returns
     total_score = df["PredictedReturn"].sum()
     df["Weight"] = df["PredictedReturn"] / total_score
-
+    print(df.columns)
     print(f"\nAllocating capital across top {diversity} stocks...\n")
 
     for _, row in df.iterrows():
@@ -122,13 +122,14 @@ def close_all_positions():
 
 
 if __name__ == "__main__":
-    # python -m trading.alpaca logs/ticker_predictions_{todays_date}.csv --diversity 20
-    # python -m trading.alpaca --monitor --tp 0.1 --sl 0.02 --interval 10
+    # python -m trading.alpaca --close_all
     # python -m trading.alpaca --diversity 20 --monitor --tp 0.1 --sl 0.05 --interval 10
+    # python -m trading.alpaca --diversity 20 --tp 0.1 --sl 0.05 --interval 10
 
     
     today_str = datetime.now().strftime("%Y-%m-%d")
     default_csv_path = f"logs/feature_df_{today_str}.csv"
+    print(default_csv_path)
     parser = argparse.ArgumentParser()
     parser.add_argument("--ranking_csv", type=str, default=default_csv_path, help="Path to predictions CSV")
     parser.add_argument("--diversity", type=int, default=20, help="Top N stocks to allocate across")
@@ -136,14 +137,21 @@ if __name__ == "__main__":
     parser.add_argument("--tp", type=float, default=0.10, help="Take profit threshold (e.g., 0.1 for 10%)")
     parser.add_argument("--sl", type=float, default=0.05, help="Stop loss threshold (e.g., 0.05 for 5%)")
     parser.add_argument("--interval", type=int, default=300, help="Check interval in seconds")
+    parser.add_argument("--get_positions", action="store_true", help="Display current open positions")
+
     # python -m trading.alpaca --close_all
     parser.add_argument("--close_all", action="store_true", help="Close all open positions immediately")
 
     args = parser.parse_args()
 
     check_account()
-    get_positions()
-    
+
+    if args.get_positions:
+        get_positions()
+        exit()
+
+    get_positions()  # Optional: you can remove this line if you only want to show positions when the flag is used
+
     if args.close_all:
         close_all_positions()
         exit()
@@ -152,3 +160,4 @@ if __name__ == "__main__":
         monitor_positions(take_profit=args.tp, stop_loss=args.sl, interval=args.interval)
     else:
         allocate_portfolio(args.ranking_csv, args.diversity)
+

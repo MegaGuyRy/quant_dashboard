@@ -161,6 +161,9 @@ if __name__ == "__main__":
             print(f"Failed for {t}: {e}")
     all_data['Date'] = pd.to_datetime(all_data['Date'])
     all_data = all_data.sort_values(by='Date')
+    file_path = f"logs/feature_df_.csv"
+    all_data.to_csv(file_path, index=False)
+    print(f"[INFO] Saved combined data to {file_path}")
     print(all_data.shape)
     print(df.tail(5))
     print(df.head(5))

@@ -1,0 +1,40 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Environment
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Logs, models, and datasets
+logs/
+models/
+*.log
+*.joblib
+*.csv
+
+# Data cache or output
+*.h5
+*.pkl
+*.sqlite3
+*.db
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# System files
+Thumbs.db
+desktop.ini

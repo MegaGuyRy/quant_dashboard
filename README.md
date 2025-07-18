@@ -1,4 +1,8 @@
 # Quant Dashboard
+- generate ticker_model_predictions.csv from xboost treee eval
+- use in alpaca.py
+
+
 ### TODO:
 - Create trade decision engine
     - Selling positions profit/stop loss
