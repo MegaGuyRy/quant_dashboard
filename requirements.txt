@@ -10,7 +10,7 @@ scikit-learn==1.4.2
 requests==2.31.0
 sqlalchemy==2.0.30
 websocket-client==1.7.0
-lmxl
-xgboost
-joblib
-python-dotenv
+lxml==4.9.3
+xgboost==2.0.3
+joblib==1.4.2
+python-dotenv==1.0.1
