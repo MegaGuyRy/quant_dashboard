@@ -1,13 +1,10 @@
 # Quant Dashboard
-- generate ticker_model_predictions.csv from xboost treee eval
-- use in alpaca.py
-
+- Use app.py in specified order to make trades
 
 ### TODO:
 - Improve decision making
-- Setup live paper trading through ALPACA API
-    - Selling positions (more strategy)
-    - code around pattern day trading protection
+- Selling positions (more strategy)
+
     
 - Backtesting and result eval with streamlit Dashboard
     - Compare agaenst NASDAC 

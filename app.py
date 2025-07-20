@@ -9,7 +9,7 @@ from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL
 from data.yahoo_data import get_historical_data, get_sp500_symbols
 from data.feature_engineering import compute_return_features
 from strategies.xboost_tree_eval import train_models, evaluate_models
-from trading.alpaca import allocate_portfolio, monitor_positions, check_account
+from trading.alpaca import allocate_portfolio, monitor_positions, check_account, get_positions
 
 # Create Alpaca API instance globally
 api = REST(ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL)
@@ -118,8 +118,8 @@ def close_all():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=[
-        "retrieve_data", "train_xgboost_model", "xgboost_eval", 
-        "trade", "monitor_positions", "close_all", "check_account"
+        "retrieve_data", "train_xgboost_model", "xgboost_eval", "trade", 
+        "monitor_positions", "close_all", "check_account", "get_positions"
     ])
     parser.add_argument("--start_date", type=str, default="2022-01-01")
     parser.add_argument("--end_date", type=str, default="2025-01-01")
@@ -145,3 +145,6 @@ if __name__ == "__main__":
         close_all()
     elif args.command == "check_account":
         check_account()
+    elif args.command == "get_positions":
+        get_positions()
+
