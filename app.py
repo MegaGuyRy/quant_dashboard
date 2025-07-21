@@ -2,8 +2,8 @@ import argparse
 import os
 from datetime import datetime
 import pandas as pd
-from alpaca_trade_api.rest import REST
 
+from alpaca_trade_api.rest import REST
 from config import get_alpaca_credentials, BASE_URL
 from data.yahoo_data import get_historical_data, get_sp500_symbols
 from data.feature_engineering import compute_return_features

@@ -14,6 +14,7 @@
 - Update Xboost_eval with the ability to choose the horizon
 
 ### Future changes:
+- Update comments for all helper functions in other moduels
 - daily, weekly, monthly, yearly returns if applicable
 - Tie it all together in app.py, make it pass all at once
 - Backtesting mode – We could add a command to backtest using stored predictions vs actuals.
@@ -28,3 +29,4 @@
 - Integrate crypto
 - Deploy so it can run outside of my local machine
 - Employ other strategies and alter back tester to reflect them (XBoost, Mean Reversal, TBD)
+- Make project a package/ add CLI Commands
