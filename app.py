@@ -20,10 +20,10 @@ def cur_date():
     """
     return datetime.now().strftime("%Y-%m-%d")
 
-def retrieve_data(start_date="2022-01-01", end_date="2025-01-01"):
+def retrieve_data(start_date="2022-01-01", end_date="2025-01-01", interval="1d"):
     """
     Step 1: Get data and engineered features
-    Run: python app.py retrieve_data --start_date 2022-01-01 --end_date 2025-07-17
+    Run: python app.py retrieve_data --start_date 2022-01-01 --end_date 2025-07-20
     Returns: df with all needed data and calculated features to train xboost trees
     """
     print("[INFO] Pulling Yahoo Finance data for S&P 500 symbols...")
@@ -81,17 +81,17 @@ def xgboost_eval(horizon=1):
     df = pd.read_csv(file_path)
     evaluate_models(df, horizon)
 
-def trade(diversity):
+def trade(diversity, horizon=1):
     """
     Step 4: Make trades based on todays ticker_model_predictions csv
     diversity: amount of stocks to spread buying power between
-    Run: python app.py trade
+    Run: python app.py trade --diversity 20
     """
     timestamp = cur_date()
-    file_path = f"logs/rankings/ticker_model_predictions_{timestamp}.csv"
+    file_path = f"logs/rankings/{horizon}/ticker_model_predictions_{timestamp}.csv"
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"[ERROR] {file_path} not found. Run 'xgboost_eval' first.")
-    ranking_csv = pd.read_csv(file_path)
+    ranking_csv = file_path
     allocate_portfolio(ranking_csv, diversity)
 
 def close_all():
@@ -123,6 +123,7 @@ if __name__ == "__main__":
     ])
     parser.add_argument("--start_date", type=str, default="2022-01-01")
     parser.add_argument("--end_date", type=str, default="2025-01-01")
+    parser.add_argument("--interval", type=str, default="1d")
     parser.add_argument("--n_trees", type=int, default=100)
     parser.add_argument("--horizon", type=int, default=1)
     parser.add_argument("--diversity", type=int, default=20)
@@ -132,7 +133,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command == "retrieve_data":
-        retrieve_data(start_date=args.start_date, end_date=args.end_date)
+        retrieve_data(start_date=args.start_date, end_date=args.end_date, interval=args.interval)
     elif args.command == "train_xgboost_model":
         train_xgboost_model(n_trees=args.n_trees, horizon=args.horizon)
     elif args.command == "xgboost_eval":
