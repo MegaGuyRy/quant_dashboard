@@ -1,20 +1,20 @@
 import pandas as pd
-from alpaca_trade_api.rest import REST, TimeFrame
+from alpaca_trade_api.rest import REST
 from datetime import datetime
-import argparse
 import time
 
-from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL  # <- use config
-
-# Create Alpaca API instance
-api = REST(ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL)
-
-def check_account():
+def check_account(api: REST):
+    """
+    Print and return account status and buying power.
+    """
     account = api.get_account()
     print(f"Account status: {account.status}, Buying power: ${account.buying_power}")
     return account
 
-def place_market_order(symbol, qty, side='buy'):
+def place_market_order(api: REST, symbol, qty, side='buy'):
+    """
+    Submit a market order to buy or sell a given stock.
+    """
     order = api.submit_order(
         symbol=symbol,
         qty=qty,
@@ -25,12 +25,18 @@ def place_market_order(symbol, qty, side='buy'):
     print(f"Placed {side} order for {qty} shares of {symbol}")
     return order
 
-def get_positions():
+def get_positions(api: REST):
+    """
+    Display current open positions.
+    """
     positions = api.list_positions()
     for p in positions:
         print(f"{p.symbol}: {p.qty} shares at avg entry ${p.avg_entry_price}")
 
-def allocate_portfolio(ranking_csv, diversity):
+def allocate_portfolio(api: REST, ranking_csv, diversity):
+    """
+    Allocate portfolio based on predicted return rankings.
+    """
     df = pd.read_csv(ranking_csv).head(diversity)
 
     account = api.get_account()
@@ -54,14 +60,17 @@ def allocate_portfolio(ranking_csv, diversity):
             print(f"{symbol}: ${price:.2f}/share | Allocating ${allocation:.2f} => Buying {qty} shares")
 
             if qty > 0:
-                place_market_order(symbol, qty, side="buy")
+                place_market_order(api, symbol, qty, side="buy")
             else:
                 print(f"Skipping {symbol}, not enough funds for even 1 share.")
         except Exception as e:
             print(f"Error processing {symbol}: {e}")
 
-def monitor_positions(take_profit=0.10, stop_loss=0.05, interval=5):
-    print(f"Monitoring positions every {interval // 60} minutes...")
+def monitor_positions(api: REST, take_profit=0.10, stop_loss=0.05, check_time=300):
+    """
+    Monitor open positions and trigger sell orders on TP or SL conditions.
+    """
+    print(f"Monitoring positions every {check_time // 60} minutes...")
     print(f"Take Profit: {take_profit * 100:.1f}% | Stop Loss: {stop_loss * 100:.1f}%\n")
 
     while True:
@@ -77,57 +86,30 @@ def monitor_positions(take_profit=0.10, stop_loss=0.05, interval=5):
 
                     if change_pct >= take_profit:
                         print(f"Taking profit on {p.symbol} ({change_pct:.2%})")
-                        place_market_order(p.symbol, int(float(p.qty)), side="sell")
+                        place_market_order(api, p.symbol, int(float(p.qty)), side="sell")
 
                     elif change_pct <= -stop_loss:
                         print(f"Stopping loss on {p.symbol} ({change_pct:.2%})")
-                        place_market_order(p.symbol, int(float(p.qty)), side="sell")
+                        place_market_order(api, p.symbol, int(float(p.qty)), side="sell")
 
                 except Exception as e:
                     print(f"Error checking {p.symbol}: {e}")
         except Exception as main_e:
             print(f"Main loop error: {main_e}")
 
-        print(f"Sleeping {interval} seconds...\n")
-        time.sleep(interval)
+        print(f"Sleeping {check_time} seconds...\n")
+        time.sleep(check_time)
 
-def close_all_positions():
+def close_all_positions(api: REST):
+    """
+    Close all open positions immediately.
+    """
     print("\nClosing all open positions...\n")
     positions = api.list_positions()
     for p in positions:
         try:
             qty = int(float(p.qty))
-            place_market_order(p.symbol, qty, side="sell")
+            place_market_order(api, p.symbol, qty, side="sell")
         except Exception as e:
             print(f"Error closing {p.symbol}: {e}")
 
-if __name__ == "__main__":
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    default_csv_path = f"logs/feature_df_{today_str}.csv"
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--ranking_csv", type=str, default=default_csv_path)
-    parser.add_argument("--diversity", type=int, default=20)
-    parser.add_argument("--monitor", action="store_true")
-    parser.add_argument("--tp", type=float, default=0.10)
-    parser.add_argument("--sl", type=float, default=0.05)
-    parser.add_argument("--interval", type=int, default=300)
-    parser.add_argument("--get_positions", action="store_true")
-    parser.add_argument("--close_all", action="store_true")
-
-    args = parser.parse_args()
-
-    check_account()
-
-    if args.get_positions:
-        get_positions()
-        exit()
-
-    if args.close_all:
-        close_all_positions()
-        exit()
-
-    if args.monitor:
-        monitor_positions(take_profit=args.tp, stop_loss=args.sl, interval=args.interval)
-    else:
-        allocate_portfolio(args.ranking_csv, args.diversity)

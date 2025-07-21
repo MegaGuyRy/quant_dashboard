@@ -1,30 +1,27 @@
-# app.py
 import argparse
 import os
 from datetime import datetime
 import pandas as pd
 from alpaca_trade_api.rest import REST
 
-from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL
+from config import get_alpaca_credentials, BASE_URL
 from data.yahoo_data import get_historical_data, get_sp500_symbols
 from data.feature_engineering import compute_return_features
 from strategies.xboost_tree_eval import train_models, evaluate_models
-from trading.alpaca import allocate_portfolio, monitor_positions, check_account
+from trading.alpaca import allocate_portfolio, monitor_positions, check_account, close_all_positions, get_positions
 
-# Create Alpaca API instance globally
-api = REST(ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL)
+# Global API object placeholder
+api = None
 
 def cur_date():
     """
-    Get todays date
+    Get today's date string
     """
     return datetime.now().strftime("%Y-%m-%d")
 
 def retrieve_data(start_date="2022-01-01", end_date="2025-01-01", interval="1d"):
     """
-    Step 1: Get data and engineered features
-    Run: python app.py retrieve_data --start_date 2022-01-01 --end_date 2025-07-20
-    Returns: df with all needed data and calculated features to train xboost trees
+    Step 1: Download historical data and compute features
     """
     print("[INFO] Pulling Yahoo Finance data for S&P 500 symbols...")
     symbols = get_sp500_symbols()
@@ -58,9 +55,7 @@ def retrieve_data(start_date="2022-01-01", end_date="2025-01-01", interval="1d")
 
 def train_xgboost_model(n_trees=100, horizon=1):
     """
-    Step 2: Train XGBoost models on latest data
-    n_trees: number of trees in forest
-    Run: python app.py train_xgboost_model --n_trees 100 --horizon=1
+    Step 2: Train XGBoost models on saved data
     """
     timestamp = cur_date()
     file_path = f"logs/features/feature_df_{timestamp}.csv"
@@ -71,8 +66,7 @@ def train_xgboost_model(n_trees=100, horizon=1):
 
 def xgboost_eval(horizon=1):
     """
-    Step 3: Evaluate XGBoost models on latest data
-    Run: python app.py xgboost_eval --horizon=1
+    Step 3: Evaluate XGBoost models and rank predictions
     """
     timestamp = cur_date()
     file_path = f"logs/features/feature_df_{timestamp}.csv"
@@ -81,45 +75,21 @@ def xgboost_eval(horizon=1):
     df = pd.read_csv(file_path)
     evaluate_models(df, horizon)
 
-def trade(diversity, horizon=1):
+def trade(api, diversity, horizon=1):
     """
-    Step 4: Make trades based on todays ticker_model_predictions csv
-    diversity: amount of stocks to spread buying power between
-    Run: python app.py trade --diversity 20
+    Step 4: Allocate capital using ranked model predictions
     """
     timestamp = cur_date()
     file_path = f"logs/rankings/{horizon}/ticker_model_predictions_{timestamp}.csv"
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"[ERROR] {file_path} not found. Run 'xgboost_eval' first.")
-    ranking_csv = file_path
-    allocate_portfolio(ranking_csv, diversity)
-
-def close_all():
-    """
-    Used to close positions at at BOD or EOD (currently manual)
-    Run: python app.py close_all
-    """
-    positions = api.list_positions()
-    if not positions:
-        print("[INFO] No open positions to close.")
-        return
-
-    print("[WARNING] The following positions will be closed:")
-    for pos in positions:
-        print(f" - {pos.symbol}: {pos.qty} shares")
-
-    confirm = input("Are you sure you want to close ALL positions? Type 'YES' to confirm: ")
-    if confirm == "YES":
-        api.close_all_positions()
-        print("[INFO] All positions have been closed.")
-    else:
-        print("[CANCELLED] No positions were closed.")
+    allocate_portfolio(api, file_path, diversity)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=[
         "retrieve_data", "train_xgboost_model", "xgboost_eval", 
-        "trade", "monitor_positions", "close_all", "check_account"
+        "trade", "monitor_positions", "close_all", "check_account", "get_positions"
     ])
     parser.add_argument("--start_date", type=str, default="2022-01-01")
     parser.add_argument("--end_date", type=str, default="2025-01-01")
@@ -129,9 +99,16 @@ if __name__ == "__main__":
     parser.add_argument("--diversity", type=int, default=20)
     parser.add_argument("--tp", type=float, default=0.1)
     parser.add_argument("--sl", type=float, default=0.05)
+    parser.add_argument("--monitor_interval", type=int, default=300)
+    parser.add_argument("--strategy", type=str, default="DAY1", help="Strategy key set to use")
 
     args = parser.parse_args()
 
+    # Setup Alpaca API client
+    creds = get_alpaca_credentials(args.strategy)
+    api = REST(creds["API_KEY"], creds["SECRET_KEY"], BASE_URL)
+
+    # Dispatch commands
     if args.command == "retrieve_data":
         retrieve_data(start_date=args.start_date, end_date=args.end_date, interval=args.interval)
     elif args.command == "train_xgboost_model":
@@ -139,10 +116,13 @@ if __name__ == "__main__":
     elif args.command == "xgboost_eval":
         xgboost_eval(horizon=args.horizon)
     elif args.command == "trade":
-        trade(diversity=args.diversity)
+        trade(api, diversity=args.diversity, horizon=args.horizon)
     elif args.command == "monitor_positions":
-        monitor_positions(take_profit=args.tp, stop_loss=args.sl)
+        monitor_positions(api, take_profit=args.tp, stop_loss=args.sl, interval=args.monitor_interval)
     elif args.command == "close_all":
-        close_all()
+        close_all_positions(api)
     elif args.command == "check_account":
-        check_account()
+        check_account(api)
+    elif args.command == "get_positions":
+        get_positions(api)
+
