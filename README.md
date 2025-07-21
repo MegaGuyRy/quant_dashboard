@@ -30,3 +30,8 @@
 - Deploy so it can run outside of my local machine
 - Employ other strategies and alter back tester to reflect them (XBoost, Mean Reversal, TBD)
 - Make project a package/ add CLI Commands
+
+### backtesting changes
+- Real price pulls from Alpaca or Yahoo
+- Daily value tracking for line charts
+- Sharpe ratio, max drawdown, etc.
