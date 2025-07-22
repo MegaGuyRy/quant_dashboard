@@ -10,7 +10,7 @@ __pycache__/
 # Environment
 .env
 .env.*
-config.py
+
 
 # macOS
 .DS_Store
@@ -35,6 +35,7 @@ models/
 .venv/
 venv/
 env/
+*.egg-info/
 
 # System files
 Thumbs.db
