@@ -22,6 +22,7 @@ def cur_date():
 def retrieve_data(start_date="2022-01-01", end_date="2025-01-01", interval="1d"):
     """
     Step 1: Download historical data and compute features
+    python app.py retrieve_data --start_date 2022-01-01 --end_date 2025-07-22 --interval 1d 
     """
     print("[INFO] Pulling Yahoo Finance data for S&P 500 symbols...")
     symbols = get_sp500_symbols()
@@ -56,6 +57,8 @@ def retrieve_data(start_date="2022-01-01", end_date="2025-01-01", interval="1d")
 def train_xgboost_model(n_trees=100, horizon=1):
     """
     Step 2: Train XGBoost models on saved data
+    python app.py train_xgboost_model --n_trees 100 --horizon 1 
+
     """
     timestamp = cur_date()
     file_path = f"logs/features/feature_df_{timestamp}.csv"
@@ -67,6 +70,7 @@ def train_xgboost_model(n_trees=100, horizon=1):
 def xgboost_eval(horizon=1):
     """
     Step 3: Evaluate XGBoost models and rank predictions
+    python app.py xgboost_eval --horizon 1 
     """
     timestamp = cur_date()
     file_path = f"logs/features/feature_df_{timestamp}.csv"
@@ -78,6 +82,7 @@ def xgboost_eval(horizon=1):
 def trade(api, diversity, horizon=1):
     """
     Step 4: Allocate capital using ranked model predictions
+    python app.py trade --diversity 10 --horizon 1 --strategy DAY1
     """
     timestamp = cur_date()
     file_path = f"logs/rankings/{horizon}/ticker_model_predictions_{timestamp}.csv"
@@ -108,6 +113,7 @@ if __name__ == "__main__":
     creds = get_alpaca_credentials(args.strategy)
     api = REST(creds["API_KEY"], creds["SECRET_KEY"], BASE_URL)
 
+
     # Dispatch commands
     if args.command == "retrieve_data":
         retrieve_data(start_date=args.start_date, end_date=args.end_date, interval=args.interval)
@@ -125,4 +131,9 @@ if __name__ == "__main__":
         check_account(api)
     elif args.command == "get_positions":
         get_positions(api)
+# python app.py monitor_positions --tp 0.1 --sl 0.05 --monitor_interval 300 --strategy DAY1
+# python app.py close_all --strategy DAY1
+# python app.py check_account --strategy DAY1
+# python app.py get_positions --strategy DAY1
+
 
