@@ -100,9 +100,11 @@ def monitor_positions(api: REST, take_profit=0.10, stop_loss=0.05, check_time=30
         print(f"Sleeping {check_time} seconds...\n")
         time.sleep(check_time)
 
-def close_all_positions(api: REST):
+
+
+def close_pos(api: REST):
     """
-    Close all open positions immediately.
+    Close a specific position by selling all shares.
     """
     print("\nClosing all open positions...\n")
     positions = api.list_positions()
@@ -112,4 +114,26 @@ def close_all_positions(api: REST):
             place_market_order(api, p.symbol, qty, side="sell")
         except Exception as e:
             print(f"Error closing {p.symbol}: {e}")
+            
+
+def close_all_positions(api: REST):
+    """
+    Close all open positions at once using Alpaca's bulk liquidation endpoint.
+    This helps avoid triggering pattern day trading (PDT) violations.
+    """
+    positions = api.list_positions()
+    if not positions:
+        print("[INFO] No open positions to close.")
+        return
+
+    print("[WARNING] The following positions will be closed:")
+    for pos in positions:
+        print(f" - {pos.symbol}: {pos.qty} shares")
+
+    confirm = input("Are you sure you want to close ALL positions? Type 'YES' to confirm: ")
+    if confirm == "YES":
+        api.close_all_positions()
+        print("[INFO] All positions have been closed.")
+    else:
+        print("[CANCELLED] No positions were closed.")
 
