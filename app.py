@@ -7,7 +7,7 @@ from alpaca_trade_api.rest import REST
 from config import get_alpaca_credentials, BASE_URL
 from data.yahoo_data import get_historical_data, get_sp500_symbols
 from data.feature_engineering import compute_return_features
-from strategies.xboost_tree_eval import train_models, evaluate_models
+from strategies.xboost_tree_eval import train_models, evaluate_models, close_all_positions
 from trading.alpaca import allocate_portfolio, monitor_positions, check_account
 
 # Global API object placeholder
