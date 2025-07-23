@@ -28,15 +28,7 @@ start_date = datetime.date(2025, 7, 21)
 # --------------------------
 st.subheader("S&P 500 Performance")
 st.subheader(today)
-try:
-    spy = yf.download("^GSPC", start=start_date, end=today)
-    if spy.empty:
-        st.warning("SPY data is empty. Trying fallback ticker 'SPY'...")
-        spy = yf.download("SPY", start=start_date, end=today)
-except Exception as e:
-    st.error(f"Failed to download S&P500 data: {e}")
-
-
+spy = yf.download("^GSPC", start=start_date, end=today, group_by="ticker", progress=False)
 st.write("Downloaded S&P500 columns:", spy.columns.tolist())
 spy.index
 st.dataframe(spy.tail(50))
