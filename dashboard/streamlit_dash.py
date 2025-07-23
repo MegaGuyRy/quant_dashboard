@@ -26,29 +26,37 @@ start_date = datetime.date(2025, 7, 21)
 # --------------------------
 # Load S&P 500 (SPY) Data
 # --------------------------
+# --------------------------
+# Load S&P 500 (SPY via Alpaca) Data
+# --------------------------
 st.subheader("S&P 500 Performance")
-st.subheader(today)
-spy = yf.download("^GSPC", start=start_date, end=today, group_by="ticker", progress=False)
-st.write("Downloaded S&P500 columns:", spy.columns.tolist())
-spy.index
-st.dataframe(spy.tail(50))
-if isinstance(spy.columns, pd.MultiIndex):
-    spy.columns = [f"S&P500_{col[1]}" for col in spy.columns]
-else:
-    # Not a multi-index: rename single-level column
-    spy.rename(columns={"Close": "S&P500_Close"}, inplace=True)
-spy.columns
-spy["S&P500_returns"] = spy["S&P500_Close"].pct_change() * 10000
-spy.reset_index(inplace=True)
-spy["Date"] = spy["Date"].dt.date
-spy = spy[spy["Date"] >= start_date]
 
-fig_spy = px.line(spy, x="Date", y="S&P500_Close", title="S&P 500 Closing Price")
-fig_spy.update_traces(line=dict(color="green"))
-st.plotly_chart(fig_spy, use_container_width=True)
+try:
+    bars = api.get_bars(
+        symbol="SPY",
+        timeframe="1D",
+        start=start_date.isoformat(),
+        end=today.isoformat()
+    ).df
 
-with st.expander("Show Raw S&P 500 Data"):
-    st.dataframe(spy.tail(50))
+    if bars.empty:
+        raise ValueError("No SPY data returned from Alpaca.")
+
+    spy = bars.reset_index()
+    spy["Date"] = spy["timestamp"].dt.date
+    spy = spy[spy["Date"] >= start_date]
+    spy = spy[["Date", "close"]].rename(columns={"close": "S&P500_Close"})
+    spy["S&P500_returns"] = spy["S&P500_Close"].pct_change() * 10000
+
+    fig_spy = px.line(spy, x="Date", y="S&P500_Close", title="S&P 500 Closing Price (via SPY ETF)")
+    fig_spy.update_traces(line=dict(color="green"))
+    st.plotly_chart(fig_spy, use_container_width=True)
+
+    with st.expander("Show Raw S&P 500 Data"):
+        st.dataframe(spy.tail(50))
+
+except Exception as e:
+    st.error(f"Failed to load S&P 500 data from Alpaca: {e}")
 
 # ------------------------
 # Load Alpaca Portfolio
