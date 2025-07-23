@@ -8,12 +8,14 @@ import plotly.graph_objects as go
 import datetime
 from alpaca_trade_api.rest import REST
 from app import cur_date
+import datetime
 #from config import get_alpaca_credentials, BASE_URL
 
 # ---------------------
 # Global config
 # ---------------------
-today = cur_date()
+today = datetime.date.today()
+
 st.set_page_config(page_title="Quant Dashboard", layout="wide")
 st.title("Algo Trader Dashboard: S&P500 vs XGBoost Trees Model ")
 
