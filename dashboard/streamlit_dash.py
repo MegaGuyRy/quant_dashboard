@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import datetime
 from alpaca_trade_api.rest import REST
 from app import cur_date
-from config import get_alpaca_credentials, BASE_URL
+#from config import get_alpaca_credentials, BASE_URL
 
 # ---------------------
 # Global config
@@ -47,8 +47,14 @@ with st.expander("Show Raw S&P 500 Data"):
 # ------------------------
 st.subheader("Alpaca Portfolio Equity")
 
-creds = get_alpaca_credentials(strategy_choice)
-api = REST(creds["API_KEY"], creds["SECRET_KEY"], BASE_URL)
+#creds = get_alpaca_credentials(strategy_choice)
+#api = REST(creds["API_KEY"], creds["SECRET_KEY"], BASE_URL)
+
+# Read credentials from Streamlit secrets
+creds = st.secrets[strategy_choice]
+base_url = st.secrets["BASE_URL"]
+
+api = REST(creds["API_KEY"], creds["SECRET_KEY"], base_url)
 
 try:
     history = api.get_portfolio_history(period="1M", timeframe="1D", extended_hours=False).df.reset_index()
