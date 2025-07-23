@@ -29,10 +29,10 @@ start_date = datetime.date(2025, 7, 21)
 st.subheader("S&P 500 Performance")
 
 spy = yf.download("^GSPC", start=start_date, end=today, group_by="ticker", progress=False)
-print(spy.columns)
+spy.columns
 if isinstance(spy.columns, pd.MultiIndex):
     spy.columns = [f"S&P500_{col[1]}" for col in spy.columns]
-print(spy.columns)
+spy.columns
 spy["S&P500_returns"] = spy["S&P500_Close"].pct_change() * 10000
 spy.reset_index(inplace=True)
 spy["Date"] = spy["Date"].dt.date
