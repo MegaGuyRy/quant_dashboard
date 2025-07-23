@@ -7,7 +7,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import datetime
 from alpaca_trade_api.rest import REST
-from app import cur_date
+#from app import cur_date
 import datetime
 #from config import get_alpaca_credentials, BASE_URL
 
