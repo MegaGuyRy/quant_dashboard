@@ -18,16 +18,6 @@ today = datetime.date.today() - datetime.timedelta(days=1)
 
 st.set_page_config(page_title="Quant Dashboard", layout="wide")
 st.title("Algo Trader Dashboard: S&P500 vs XGBoost Trees Model ")
-import yfinance as yf
-import streamlit as st
-
-try:
-    st.write("Fetching SPY data...")
-    df = yf.download("SPY", start="2024-01-01", end="2024-01-10")
-    st.write("Data shape:", df.shape)
-    st.dataframe(df.head())
-except Exception as e:
-    st.error(f"Error fetching SPY: {e}")
 
 # Sidebar Strategy Selection
 strategy_choice = st.sidebar.selectbox("Select Alpaca Strategy", ["day1", "day7", "day30"])
