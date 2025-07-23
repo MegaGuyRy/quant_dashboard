@@ -32,6 +32,9 @@ spy = yf.download("^GSPC", start=start_date, end=today, group_by="ticker", progr
 spy.columns
 if isinstance(spy.columns, pd.MultiIndex):
     spy.columns = [f"S&P500_{col[1]}" for col in spy.columns]
+else:
+    # Not a multi-index: rename single-level column
+    spy.rename(columns={"Close": "S&P500_Close"}, inplace=True)
 spy.columns
 spy["S&P500_returns"] = spy["S&P500_Close"].pct_change() * 10000
 spy.reset_index(inplace=True)
