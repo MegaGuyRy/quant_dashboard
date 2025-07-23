@@ -14,7 +14,7 @@ import datetime
 # ---------------------
 # Global config
 # ---------------------
-today = datetime.date.today()
+today = datetime.date.today() - datetime.timedelta(days=1)
 
 st.set_page_config(page_title="Quant Dashboard", layout="wide")
 st.title("Algo Trader Dashboard: S&P500 vs XGBoost Trees Model ")
