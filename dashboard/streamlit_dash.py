@@ -30,7 +30,7 @@ st.subheader("S&P 500 Performance")
 
 spy = yf.download("^GSPC", start=start_date, end=today, group_by="ticker", progress=False)
 st.write("Downloaded S&P500 columns:", spy.columns.tolist())
-
+spy.index
 if isinstance(spy.columns, pd.MultiIndex):
     spy.columns = [f"S&P500_{col[1]}" for col in spy.columns]
 else:
