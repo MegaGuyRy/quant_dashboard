@@ -2,14 +2,10 @@
 
 import streamlit as st
 import pandas as pd
-import yfinance as yf
 import plotly.express as px
 import plotly.graph_objects as go
 import datetime
 from alpaca_trade_api.rest import REST
-#from app import cur_date
-import datetime
-#from config import get_alpaca_credentials, BASE_URL
 
 # ---------------------
 # Global config
@@ -23,9 +19,13 @@ st.title("Algo Trader Dashboard: S&P500 vs XGBoost Trees Model ")
 strategy_choice = st.sidebar.selectbox("Select Alpaca Strategy", ["day1", "day7", "day30"])
 start_date = datetime.date(2025, 7, 21)
 
-# --------------------------
-# Load S&P 500 (SPY) Data
-# --------------------------
+# ------------------------
+# Load Alpaca API with Streamlit Secrets
+# ------------------------
+creds = st.secrets[strategy_choice]
+base_url = st.secrets["BASE_URL"]
+api = REST(creds["API_KEY"], creds["SECRET_KEY"], base_url)
+
 # --------------------------
 # Load S&P 500 (SPY via Alpaca) Data
 # --------------------------
@@ -62,15 +62,6 @@ except Exception as e:
 # Load Alpaca Portfolio
 # ------------------------
 st.subheader("Alpaca Portfolio Equity")
-
-#creds = get_alpaca_credentials(strategy_choice)
-#api = REST(creds["API_KEY"], creds["SECRET_KEY"], BASE_URL)
-
-# Read credentials from Streamlit secrets
-creds = st.secrets[strategy_choice]
-base_url = st.secrets["BASE_URL"]
-
-api = REST(creds["API_KEY"], creds["SECRET_KEY"], base_url)
 
 try:
     history = api.get_portfolio_history(period="1M", timeframe="1D", extended_hours=False).df.reset_index()
@@ -133,7 +124,6 @@ try:
     sharpe_spy = (combined_df['S&P500_1d%'].mean() / combined_df['S&P500_1d%'].std()) * (252 ** 0.5)
     st.sidebar.metric("Sharpe Ratio", f"{sharpe_spy:.2f}")
 
-
     st.sidebar.markdown("---")
     st.sidebar.markdown("Alpaca Metrics")
     st.sidebar.metric("1D Change", f"{latest['Alpaca_1d%']:.2f}%")
@@ -150,4 +140,3 @@ try:
 
 except Exception as e:
     st.error(f"Failed to load Alpaca portfolio history: {e}")
-
