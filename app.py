@@ -57,7 +57,7 @@ def retrieve_data(start_date="2022-01-01", end_date="2025-01-01", interval="1d")
 def train_xgboost_model(n_trees=100, horizon=1):
     """
     Step 2: Train XGBoost models on saved data
-    python app.py train_xgboost_model --n_trees 100 --horizon 1 
+    python app.py train_xgboost_model --n_trees 200 --horizon 1 
 
     """
     timestamp = cur_date()
