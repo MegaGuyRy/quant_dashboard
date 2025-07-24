@@ -36,7 +36,8 @@ try:
         symbol="SPY",
         timeframe="1D",
         start=start_date.isoformat(),
-        end=today.isoformat()
+        end=today.isoformat(),
+        feed="iex"  # Force IEX feed (free tier)
     ).df
 
     if bars.empty:
