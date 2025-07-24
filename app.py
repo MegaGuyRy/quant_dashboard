@@ -19,10 +19,10 @@ def cur_date():
     """
     return datetime.now().strftime("%Y-%m-%d")
 
-def retrieve_data(start_date="2022-01-01", end_date="2025-01-01", interval="1d"):
+def retrieve_data(start_date="2020-01-01", end_date="2025-01-01", interval="1d"):
     """
     Step 1: Download historical data and compute features
-    python app.py retrieve_data --start_date 2022-01-01 --end_date 2025-07-22 --interval 1d 
+    python app.py retrieve_data --start_date 2020-01-01 --end_date 2025-07-24 --interval 1d 
     """
     print("[INFO] Pulling Yahoo Finance data for S&P 500 symbols...")
     symbols = get_sp500_symbols()

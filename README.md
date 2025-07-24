@@ -1,4 +1,7 @@
 # Quant Dashboard
+- Issue with dashboard yahoo data download isnt working got to find work around (another api or use csv)
+
+
 - generate ticker_model_predictions.csv from xboost treee eval
 - use in alpaca.py
 
