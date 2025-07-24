@@ -47,7 +47,7 @@ try:
     spy["Date"] = spy["timestamp"].dt.date
     spy = spy[spy["Date"] >= start_date]
     spy = spy[["Date", "close"]].rename(columns={"close": "S&P500_Close"})
-    spy["S&P500_returns"] = spy["S&P500_Close"].pct_change() * 10000
+    spy["S&P500_returns"] = spy["S&P500_Close"].pct_change() * 1000
 
     fig_spy = px.line(spy, x="Date", y="S&P500_Close", title="S&P 500 Closing Price (via SPY ETF)")
     fig_spy.update_traces(line=dict(color="green"))
