@@ -37,7 +37,7 @@ try:
         timeframe="1D",
         start=start_date.isoformat(),
         end=today.isoformat(),
-        feed="iex"  # Force IEX feed (free tier)
+        feed="iex"
     ).df
 
     if bars.empty:
@@ -47,7 +47,6 @@ try:
     spy["Date"] = spy["timestamp"].dt.date
     spy = spy[spy["Date"] >= start_date]
     spy = spy[["Date", "close"]].rename(columns={"close": "S&P500_Close"})
-    spy["S&P500_returns"] = spy["S&P500_Close"].pct_change() * 1000
 
     fig_spy = px.line(spy, x="Date", y="S&P500_Close", title="S&P 500 Closing Price (via SPY ETF)")
     fig_spy.update_traces(line=dict(color="green"))
@@ -70,7 +69,6 @@ try:
     history = history[["Date", "profit_loss", "equity"]]
     history = history[history["equity"] > 0]
     history = history[history["Date"] >= start_date]
-    history["returns"] = history["equity"].pct_change() * 10000
 
     fig_alpaca = px.line(history, x="Date", y="equity", title="Alpaca Portfolio Equity")
     fig_alpaca.update_traces(line=dict(color="gold"))
@@ -89,55 +87,22 @@ try:
     alpaca_subset = history[["Date", "equity"]].rename(columns={"equity": "Alpaca Portfolio"})
 
     combined_df = pd.merge(spy_subset, alpaca_subset, on="Date", how="inner")
-    combined_df["S&P500_1d%"] = combined_df["S&P 500"].pct_change(periods=1) * 100
-    combined_df["Alpaca_1d%"] = combined_df["Alpaca Portfolio"].pct_change(periods=1) * 100
-    combined_df["S&P500_5d%"] = combined_df["S&P 500"].pct_change(periods=5) * 100
-    combined_df["Alpaca_5d%"] = combined_df["Alpaca Portfolio"].pct_change(periods=5) * 100
-    combined_df["S&P500_1mo%"] = combined_df["S&P 500"].pct_change(periods=21) * 100
-    combined_df["Alpaca_1mo%"] = combined_df["Alpaca Portfolio"].pct_change(periods=21) * 100
+
+    # Total % change since beginning for each time frame
+    combined_df["S&P500_total%"] = (combined_df["S&P 500"] / combined_df["S&P 500"].iloc[0] - 1) * 100
+    combined_df["Alpaca_total%"] = (combined_df["Alpaca Portfolio"] / combined_df["Alpaca Portfolio"].iloc[0] - 1) * 100
 
     # Plot Comparison
-    st.subheader("S&P 500 vs Alpaca Portfolio")
+    st.subheader("Total % Change: S&P 500 vs Alpaca Portfolio")
     fig_compare = go.Figure()
-    fig_compare.add_trace(go.Scatter(x=combined_df["Date"], y=combined_df["S&P500_1d%"], mode='lines', line=dict(color='green'), name='S&P500 1d% Change'))
-    fig_compare.add_trace(go.Scatter(x=combined_df["Date"], y=combined_df["Alpaca_1d%"], mode='lines', line=dict(color='gold'), name='Alpaca 1d% Change'))
-    fig_compare.update_layout(title='1 Day Change Comparison', xaxis_title='Date', yaxis_title='1 Day Change')
+    fig_compare.add_trace(go.Scatter(x=combined_df["Date"], y=combined_df["S&P500_total%"], mode='lines', line=dict(color='green'), name='S&P500 Total % Change'))
+    fig_compare.add_trace(go.Scatter(x=combined_df["Date"], y=combined_df["Alpaca_total%"], mode='lines', line=dict(color='gold'), name='Alpaca Total % Change'))
+    fig_compare.update_layout(title='Total % Change Since Start', xaxis_title='Date', yaxis_title='Cumulative Return (%)')
     st.plotly_chart(fig_compare, use_container_width=True)
 
     with st.expander("Show Performance Data"):
         st.dataframe(combined_df.tail(50))
 
-    # ------------------------
-    # Organized Sidebar Metrics
-    # ------------------------
-    latest = combined_df.iloc[-1]
-
-    st.sidebar.markdown("S&P 500 Metrics")
-    st.sidebar.metric("1D Change", f"{latest['S&P500_1d%']:.2f}%")
-    st.sidebar.metric("5D Change", f"{latest['S&P500_5d%']:.2f}%")
-    st.sidebar.metric("30D Change", f"{latest['S&P500_1mo%']:.2f}%")
-    st.sidebar.metric("Mean Return", f"{combined_df['S&P500_1d%'].mean():.2f}%")
-    st.sidebar.metric("Std Dev", f"{combined_df['S&P500_1d%'].std():.2f}%")
-    st.sidebar.metric("Max Return", f"{combined_df['S&P500_1d%'].max():.2f}%")
-    st.sidebar.metric("Min Return", f"{combined_df['S&P500_1d%'].min():.2f}%")
-    total_profit_sp500 = spy_subset["S&P 500"].iloc[-1] - spy_subset["S&P 500"].iloc[0]
-    st.sidebar.metric("Total Profit", f"${total_profit_sp500:,.2f}")
-    sharpe_spy = (combined_df['S&P500_1d%'].mean() / combined_df['S&P500_1d%'].std()) * (252 ** 0.5)
-    st.sidebar.metric("Sharpe Ratio", f"{sharpe_spy:.2f}")
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("Alpaca Metrics")
-    st.sidebar.metric("1D Change", f"{latest['Alpaca_1d%']:.2f}%")
-    st.sidebar.metric("5D Change", f"{latest['Alpaca_5d%']:.2f}%")
-    st.sidebar.metric("30D Change", f"{latest['Alpaca_1mo%']:.2f}%")
-    st.sidebar.metric("Mean Return", f"{combined_df['Alpaca_1d%'].mean():.2f}%")
-    st.sidebar.metric("Std Dev", f"{combined_df['Alpaca_1d%'].std():.2f}%")
-    st.sidebar.metric("Max Return", f"{combined_df['Alpaca_1d%'].max():.2f}%")
-    st.sidebar.metric("Min Return", f"{combined_df['Alpaca_1d%'].min():.2f}%")
-    total_profit_alpaca = alpaca_subset["Alpaca Portfolio"].iloc[-1] - alpaca_subset["Alpaca Portfolio"].iloc[0]
-    st.sidebar.metric("Total Profit", f"${total_profit_alpaca:,.2f}")
-    sharpe_alpaca = (combined_df['Alpaca_1d%'].mean() / combined_df['Alpaca_1d%'].std()) * (252 ** 0.5)
-    st.sidebar.metric("Sharpe Ratio", f"{sharpe_alpaca:.2f}")
-
 except Exception as e:
     st.error(f"Failed to load Alpaca portfolio history: {e}")
+
