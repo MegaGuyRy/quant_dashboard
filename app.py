@@ -126,6 +126,7 @@ if __name__ == "__main__":
     elif args.command == "monitor_positions":
         monitor_positions(api, take_profit=args.tp, stop_loss=args.sl, interval=args.monitor_interval)
     elif args.command == "close_all":
+    # python app.py close_all --strategy DAY1
         close_all_positions(api)
     elif args.command == "check_account":
         check_account(api)

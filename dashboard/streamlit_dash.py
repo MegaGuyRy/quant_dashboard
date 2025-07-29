@@ -1,5 +1,3 @@
-# dashboard/streamlit_dash.py
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -88,9 +86,13 @@ try:
 
     combined_df = pd.merge(spy_subset, alpaca_subset, on="Date", how="inner")
 
-    # Total % change since beginning for each time frame
+    # Total % change since beginning
     combined_df["S&P500_total%"] = (combined_df["S&P 500"] / combined_df["S&P 500"].iloc[0] - 1) * 100
     combined_df["Alpaca_total%"] = (combined_df["Alpaca Portfolio"] / combined_df["Alpaca Portfolio"].iloc[0] - 1) * 100
+
+    # Daily % change for metrics
+    combined_df["S&P500_1d%"] = combined_df["S&P 500"].pct_change() * 100
+    combined_df["Alpaca_1d%"] = combined_df["Alpaca Portfolio"].pct_change() * 100
 
     # Plot Comparison
     st.subheader("Total % Change: S&P 500 vs Alpaca Portfolio")
@@ -102,6 +104,29 @@ try:
 
     with st.expander("Show Performance Data"):
         st.dataframe(combined_df.tail(50))
+
+    # ------------------------
+    # Sidebar Metrics
+    # ------------------------
+    latest = combined_df.iloc[-1]
+
+    st.sidebar.header("S&P 500 Metrics")
+    st.sidebar.metric("1D Return", f"{latest['S&P500_1d%']:.2f}%")
+    st.sidebar.metric("Total Return", f"{latest['S&P500_total%']:.2f}%")
+    st.sidebar.metric("Mean Daily Return", f"{combined_df['S&P500_1d%'].mean():.2f}%")
+    st.sidebar.metric("Std Dev (1D)", f"{combined_df['S&P500_1d%'].std():.2f}%")
+    sharpe_spy = (combined_df['S&P500_1d%'].mean() / combined_df['S&P500_1d%'].std()) * (252 ** 0.5)
+    st.sidebar.metric("Sharpe Ratio", f"{sharpe_spy:.2f}")
+
+    st.sidebar.markdown("---")
+
+    st.sidebar.header("Alpaca Metrics")
+    st.sidebar.metric("1D Return", f"{latest['Alpaca_1d%']:.2f}%")
+    st.sidebar.metric("Total Return", f"{latest['Alpaca_total%']:.2f}%")
+    st.sidebar.metric("Mean Daily Return", f"{combined_df['Alpaca_1d%'].mean():.2f}%")
+    st.sidebar.metric("Std Dev (1D)", f"{combined_df['Alpaca_1d%'].std():.2f}%")
+    sharpe_alpaca = (combined_df['Alpaca_1d%'].mean() / combined_df['Alpaca_1d%'].std()) * (252 ** 0.5)
+    st.sidebar.metric("Sharpe Ratio", f"{sharpe_alpaca:.2f}")
 
 except Exception as e:
     st.error(f"Failed to load Alpaca portfolio history: {e}")
