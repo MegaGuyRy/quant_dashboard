@@ -1,68 +1,170 @@
-# app_auto.py
-
-import os
-from dotenv import load_dotenv
-from datetime import datetime
+import sqlalchemy
+from sqlalchemy import create_engine, text
 import pandas as pd
-import psycopg2
-
-from config import BASE_URL
+from datetime import datetime
 from data.yahoo_data import get_historical_data, get_sp500_symbols
 from data.feature_engineering import compute_return_features
-from strategies.xboost_tree_eval import train_models, evaluate_models
-from trading.db_utils import insert_predictions_to_db
-from trading.alpaca import get_alpaca_credentials
+import psycopg2
+import os
+from dotenv import load_dotenv
 
-# ------------------------
-# Load .env and credentials
-# ------------------------
+# Load environment variables
 load_dotenv()
-strategy = os.getenv("STRATEGY", "day1")
-db_password = os.getenv("POSTGRES_PASSWORD")
 
-conn = psycopg2.connect(
-    dbname="quant_trading",
-    user="ryan",
-    password=db_password,
-    host="localhost",
-    port="5432"
-)
+# Connect details
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-def run_daily_pipeline():
-    print("[INFO] Starting automated pipeline...")
+def create_market_data_table_if_not_exists():
+    """
+    Creates the 'market_data' table in the 'public' schema if it doesn't already exist.
+    """
+    conn = psycopg2.connect(
+        dbname=os.getenv("POSTGRES_DB"),
+        user=os.getenv("POSTGRES_USER"),
+        password=os.getenv("POSTGRES_PASSWORD"),
+        host="localhost",
+        port=5432
+    )
+    cur = conn.cursor()
 
-    # 1. Load tickers
-    tickers = get_sp500_symbols()
-    start_date = "2020-01-01"
-    end_date = datetime.today().strftime("%Y-%m-%d")
+    create_table_query = """
+    CREATE TABLE IF NOT EXISTS public.market_data (
+        "Date" DATE,
+        "Close" FLOAT,
+        "High" FLOAT,
+        "Low" FLOAT,
+        "Open" FLOAT,
+        "Volume" BIGINT,
+        "return_1" FLOAT,
+        "return_5" FLOAT,
+        "return_22" FLOAT,
+        "return_252" FLOAT,
+        "ma_5" FLOAT,
+        "ma_10" FLOAT,
+        "ma_20" FLOAT,
+        "ma_5_20_ratio" FLOAT,
+        "rsi_14" FLOAT,
+        "vol_5" FLOAT,
+        "vol_10" FLOAT,
+        "gk_vol" FLOAT,
+        "bollinger_b" FLOAT,
+        "atr" FLOAT,
+        "macd" FLOAT,
+        "macd_signal" FLOAT,
+        "dollar_volume" FLOAT,
+        "Symbol" TEXT,
+        PRIMARY KEY ("Date", "Symbol")
+    );
+    """
 
-    # 2. Pull and combine data
-    all_data = pd.DataFrame()
-    for symbol in tickers:
-        try:
-            df = get_historical_data(symbol, start=start_date, end=end_date)
-            if isinstance(df.columns, pd.MultiIndex):
+    try:
+        cur.execute(create_table_query)
+        conn.commit()
+        print("[INFO] public.market_data table is ready.")
+    except Exception as e:
+        print(f"[ERROR] Failed to create table: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+def retrieve_data_to_db():
+    """
+    Downloads and inserts data into PostgreSQL (only new dates).
+    """
+    #symbols = get_sp500_symbols()
+    symbols = ["AAPL"]  # keep short for testing
+    engine = create_engine(DATABASE_URL)
+
+    dtype_map = {
+        "Date": sqlalchemy.Date,
+        "Close": sqlalchemy.Float,
+        "High": sqlalchemy.Float,
+        "Low": sqlalchemy.Float,
+        "Open": sqlalchemy.Float,
+        "Volume": sqlalchemy.BigInteger,
+        "return_1": sqlalchemy.Float,
+        "return_5": sqlalchemy.Float,
+        "return_22": sqlalchemy.Float,
+        "return_252": sqlalchemy.Float,
+        "ma_5": sqlalchemy.Float,
+        "ma_10": sqlalchemy.Float,
+        "ma_20": sqlalchemy.Float,
+        "ma_5_20_ratio": sqlalchemy.Float,
+        "rsi_14": sqlalchemy.Float,
+        "vol_5": sqlalchemy.Float,
+        "vol_10": sqlalchemy.Float,
+        "gk_vol": sqlalchemy.Float,
+        "bollinger_b": sqlalchemy.Float,
+        "atr": sqlalchemy.Float,
+        "macd": sqlalchemy.Float,
+        "macd_signal": sqlalchemy.Float,
+        "dollar_volume": sqlalchemy.Float,
+        "Symbol": sqlalchemy.Text
+    }
+
+    with engine.connect() as conn:
+        for symbol in symbols:
+            try:
+                print(f"[INFO] Pulling data for {symbol}")
+                df = get_historical_data(symbol)
                 df = compute_return_features(df)
                 df["Symbol"] = symbol
-                df.columns = df.columns.droplevel(1)
-            else:
-                df["Symbol"] = symbol
-            df.reset_index(inplace=True)
-            all_data = pd.concat([all_data, df], ignore_index=True)
-            print(f"[DATA] Collected: {symbol}")
-        except Exception as e:
-            print(f"[WARN] {symbol} failed: {e}")
 
-    # 3. Train and evaluate
-    horizon = 1  # change if needed
-    all_data['Date'] = pd.to_datetime(all_data['Date'])
-    train_models(all_data, n_trees=200, horizon=horizon)
-    prediction_df = evaluate_models(all_data, horizon=horizon)
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.droplevel(1)
 
-    # 4. Write predictions to PostgreSQL
-    insert_predictions_to_db(conn, prediction_df, horizon, strategy.upper())
+                df.reset_index(inplace=True)
 
-    print("[INFO] Finished model creation + DB write")
+                df = df[[
+                    "Date", "Close", "High", "Low", "Open", "Volume",
+                    "return_1", "return_5", "return_22", "return_252",
+                    "ma_5", "ma_10", "ma_20", "ma_5_20_ratio",
+                    "rsi_14", "vol_5", "vol_10", "gk_vol", "bollinger_b",
+                    "atr", "macd", "macd_signal", "dollar_volume", "Symbol"
+                ]]
+                df["Date"] = pd.to_datetime(df["Date"]).dt.date  
+
+                existing_dates_query = text("""
+                    SELECT "Date" FROM public.market_data WHERE "Symbol" = :symbol
+                """)
+                existing_dates = pd.read_sql(existing_dates_query, conn, params={"symbol": symbol})
+
+                before = len(df)
+                if not existing_dates.empty:
+                    df = df[~df["Date"].isin(existing_dates["Date"])]
+                after = len(df)
+
+                print(f"[DEBUG] {symbol}: Filtered {before - after} rows. Remaining: {after}")
+                print("[DEBUG] Final DataFrame to insert:")
+                print(df.head(3))
+
+                if not df.empty:
+                    try:
+                        with engine.begin() as connection:
+                            df.to_sql(
+                                "market_data",
+                                con=connection,
+                                schema="public",
+                                if_exists="append",
+                                index=False,
+                                method="multi",
+                                dtype=dtype_map
+                            )
+                        print(f"[INFO] Inserted {len(df)} new rows for {symbol}")
+                    except Exception as db_error:
+                        print(f"[ERROR] Insert failed: {db_error}")
+                        print("[DEBUG] Data types:")
+                        print(df.dtypes)
+                        print("[DEBUG] Rows sample:")
+                        print(df.head())
+                else:
+                    print(f"[INFO] No new data for {symbol}")
+
+            except Exception as e:
+                print(f"[WARNING] Failed to process {symbol}: {e}")
+                
 
 if __name__ == "__main__":
-    run_daily_pipeline()
+    create_market_data_table_if_not_exists()
+    retrieve_data_to_db()
+
