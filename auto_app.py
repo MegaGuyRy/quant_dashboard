@@ -7,6 +7,7 @@ from data.feature_engineering import compute_return_features
 import psycopg2
 import os
 from dotenv import load_dotenv
+from init_db import create_database_if_not_exists
 
 # Load environment variables
 load_dotenv()
@@ -56,13 +57,12 @@ def create_market_data_table_if_not_exists():
         PRIMARY KEY ("Date", "Symbol")
     );
     """
-
     try:
         cur.execute(create_table_query)
         conn.commit()
         print("[INFO] public.market_data table is ready.")
     except Exception as e:
-        print(f"[ERROR] Failed to create table: {e}")
+        print(f"[ERROR] Could not connect to Database: {e}")
     finally:
         cur.close()
         conn.close()
@@ -71,8 +71,8 @@ def retrieve_data_to_db():
     """
     Downloads and inserts data into PostgreSQL (only new dates).
     """
-    #symbols = get_sp500_symbols()
-    symbols = ["AAPL"]  # keep short for testing
+    symbols = get_sp500_symbols()
+    #symbols = ["AAPL"]  # keep short for testing
     engine = create_engine(DATABASE_URL)
 
     dtype_map = {
@@ -101,12 +101,12 @@ def retrieve_data_to_db():
         "dollar_volume": sqlalchemy.Float,
         "Symbol": sqlalchemy.Text
     }
-
+    today = datetime.now().strftime("%Y-%m-%d")
     with engine.connect() as conn:
         for symbol in symbols:
             try:
                 print(f"[INFO] Pulling data for {symbol}")
-                df = get_historical_data(symbol)
+                df = get_historical_data(symbol, start="2024-01-01", end=today, interval="1d", auto_adjust=False)
                 df = compute_return_features(df)
                 df["Symbol"] = symbol
 
@@ -164,7 +164,11 @@ def retrieve_data_to_db():
                 print(f"[WARNING] Failed to process {symbol}: {e}")
                 
 
+
+
+
 if __name__ == "__main__":
+    create_database_if_not_exists()
     create_market_data_table_if_not_exists()
     retrieve_data_to_db()
 
