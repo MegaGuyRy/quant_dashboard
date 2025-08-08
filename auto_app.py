@@ -1,35 +1,39 @@
+# auto_app.py
+import os
 import sqlalchemy
-from datetime import datetime, timedelta
 from sqlalchemy import create_engine, text
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
+import psycopg2
+from dotenv import load_dotenv
+
 from data.yahoo_data import get_historical_data, get_sp500_symbols
 from data.feature_engineering import compute_return_features
-import psycopg2
-import os
-from dotenv import load_dotenv
-from init_db import create_database_if_not_exists
 from strategies.xboost_tree_eval import train_models, evaluate_models
 
-# Load environment variables
+# ----------------------------
+# Env & Engine
+# ----------------------------
 load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")  # e.g. postgresql://ryan:pass@localhost:5432/trading
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL env var is not set.")
 
-# Connect details
-DATABASE_URL = os.getenv("DATABASE_URL")
-
+# ----------------------------
+# DDL: create market_data table
+# ----------------------------
 def create_market_data_table_if_not_exists():
     """
-    Creates the 'market_data' table in the 'public' schema if it doesn't already exist.
+    Creates the 'public.market_data' table if it doesn't already exist.
     """
     conn = psycopg2.connect(
         dbname=os.getenv("POSTGRES_DB"),
         user=os.getenv("POSTGRES_USER"),
         password=os.getenv("POSTGRES_PASSWORD"),
-        host="localhost",
-        port=5432
+        host=os.getenv("POSTGRES_HOST", "localhost"),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
     )
     cur = conn.cursor()
-
     create_table_query = """
     CREATE TABLE IF NOT EXISTS public.market_data (
         "Date" DATE,
@@ -63,19 +67,27 @@ def create_market_data_table_if_not_exists():
         cur.execute(create_table_query)
         conn.commit()
         print("[INFO] public.market_data table is ready.")
-    except Exception as e:
-        print(f"[ERROR] Could not connect to Database: {e}")
     finally:
         cur.close()
         conn.close()
 
-def retrieve_data_to_db():
+# ----------------------------
+# ETL: retrieve & append only new rows
+# ----------------------------
+def retrieve_data_to_db(start="2015-01-01", end=None, symbols=None):
     """
-    Downloads and inserts only *new* data for each symbol into PostgreSQL.
-    Optimized to avoid redundant downloads and DB connections.
+    Downloads OHLCV, computes features, and inserts only new dates per symbol.
     """
-    symbols = get_sp500_symbols()
-    today = datetime.now().strftime("%Y-%m-%d")
+    if end is None:
+        end = datetime.now().strftime("%Y-%m-%d")
+
+    # Avoid start=end (yfinance will error); nudge end forward by 1 day if needed
+    if pd.to_datetime(start) >= pd.to_datetime(end):
+        end = (pd.to_datetime(start) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+
+    if symbols is None:
+        symbols = get_sp500_symbols()  # or pass a smaller list while testing
+
     engine = create_engine(DATABASE_URL)
 
     dtype_map = {
@@ -102,45 +114,24 @@ def retrieve_data_to_db():
         "macd": sqlalchemy.Float,
         "macd_signal": sqlalchemy.Float,
         "dollar_volume": sqlalchemy.Float,
-        "Symbol": sqlalchemy.Text
+        "Symbol": sqlalchemy.Text,
     }
 
-    # Open single connection for all operations
-    with engine.begin() as connection:
-        # STEP 1: Get latest available dates per symbol from the DB
-        latest_dates_query = """
-            SELECT "Symbol", MAX("Date") AS last_date
-            FROM public.market_data
-            GROUP BY "Symbol"
-        """
-        latest_df = pd.read_sql(latest_dates_query, connection)
-        latest_map = dict(zip(latest_df["Symbol"], latest_df["last_date"]))
-
+    with engine.connect() as conn:
         for symbol in symbols:
             try:
-                # STEP 2: Use latest DB date as the start for new download
-                start_date = latest_map.get(symbol, "2015-01-01")
-                start_date = pd.to_datetime(start_date) + pd.Timedelta(days=1)
-
-                if start_date >= pd.to_datetime(today):
-                    print(f"[SKIP] {symbol}: Already up-to-date.")
-                    continue
-
-                print(f"[INFO] Pulling data for {symbol} from {start_date.date()} to {today}")
-                df = get_historical_data(symbol, start=start_date.strftime("%Y-%m-%d"), end=today, interval="1d", auto_adjust=False)
-                if df.empty:
-                    print(f"[INFO] {symbol}: No new data returned by Yahoo.")
-                    continue
-
+                print(f"[INFO] Pulling data for {symbol}")
+                df = get_historical_data(symbol, start=start, end=end, interval="1d", auto_adjust=False)
                 df = compute_return_features(df)
                 df["Symbol"] = symbol
 
+                # Drop multiindex from yfinance if present
                 if isinstance(df.columns, pd.MultiIndex):
                     df.columns = df.columns.droplevel(1)
 
-                df.reset_index(inplace=True)
-                df["Date"] = pd.to_datetime(df["Date"]).dt.date
+                df = df.reset_index()
 
+                # Keep exact feature set we expect in DB
                 df = df[[
                     "Date", "Close", "High", "Low", "Open", "Volume",
                     "return_1", "return_5", "return_22", "return_252",
@@ -149,67 +140,107 @@ def retrieve_data_to_db():
                     "atr", "macd", "macd_signal", "dollar_volume", "Symbol"
                 ]]
 
-                # STEP 3: Insert only if there is new data
+                # Ensure Date is a date (not datetime)
+                df["Date"] = pd.to_datetime(df["Date"]).dt.date
+
+                # Find existing dates for this symbol
+                existing_dates = pd.read_sql(
+                    text('SELECT "Date" FROM public.market_data WHERE "Symbol" = :symbol'),
+                    conn,
+                    params={"symbol": symbol},
+                )
+
+                before = len(df)
+                if not existing_dates.empty:
+                    df = df[~df["Date"].isin(existing_dates["Date"])]
+                after = len(df)
+                print(f"[DEBUG] {symbol}: Filtered {before - after} rows. Remaining: {after}")
+
+                # Insert new rows
                 if not df.empty:
-                    df.to_sql(
-                        "market_data",
-                        con=connection,
-                        schema="public",
-                        if_exists="append",
-                        index=False,
-                        method="multi",
-                        dtype=dtype_map
-                    )
-                    print(f"[INSERTED] {symbol}: {len(df)} new rows")
+                    with engine.begin() as connection:
+                        df.to_sql(
+                            "market_data",
+                            con=connection,
+                            schema="public",
+                            if_exists="append",
+                            index=False,
+                            method="multi",
+                            dtype=dtype_map,
+                        )
+                    print(f"[INFO] Inserted {len(df)} new rows for {symbol}")
                 else:
-                    print(f"[SKIP] {symbol}: No new rows to insert")
-
+                    print(f"[SKIP] {symbol}: Already up-to-date.")
             except Exception as e:
-                print(f"[ERROR] {symbol}: {e}")
+                print(f"[WARNING] Failed to process {symbol}: {e}")
 
+# ----------------------------
+# Helpers for training/evaluation from DB
+# ----------------------------
+FEATURE_COLS = [
+    "return_1","return_5","return_22","return_252",
+    "ma_5","ma_10","ma_20","ma_5_20_ratio",
+    "rsi_14","vol_5","vol_10","gk_vol",
+    "bollinger_b","atr","macd","macd_signal","dollar_volume",
+]
 
-def train_xgboost_models_from_db(n_trees=100, horizon=1):
+def _load_df_for_training(engine, require_yesterday=False):
     """
-    Pulls symbol data from the DB, filters out those not updated to yesterday,
-    and trains a separate XGBoost model per symbol using GPU.
+    Pull the exact feature set + Close/Date/Symbol from DB so we never drift.
+    Optionally filter symbols to those with data for yesterday.
     """
-    engine = create_engine(DATABASE_URL)
-    yesterday = (datetime.now() - timedelta(days=1)).date()
-
-    query = """
-        SELECT * FROM public.market_data
+    q = """
+        SELECT "Date", "Close", "Symbol", """ + ",".join(f'"{c}"' for c in FEATURE_COLS) + """
+        FROM public.market_data
         WHERE "Date" IS NOT NULL AND "Symbol" IS NOT NULL
-        ORDER BY "Symbol", "Date"
+        ORDER BY "Symbol","Date"
     """
-    df = pd.read_sql(query, engine)
+    df = pd.read_sql(q, engine)
+    df["Date"] = pd.to_datetime(df["Date"])
 
-    if df.empty:
-        print("[WARNING] No data found in database.")
-        return
+    if require_yesterday:
+        yday = (datetime.utcnow() - timedelta(days=1)).date()
+        have_yday = df[df["Date"].dt.date == yday][["Symbol"]].drop_duplicates()
+        df = df.merge(have_yday, on="Symbol", how="inner")
 
-    df.dropna(inplace=True)
-    df["Date"] = pd.to_datetime(df["Date"]).dt.date
+    return df
 
-    # Only keep symbols that have data for yesterday
-    latest_df = df.groupby("Symbol")["Date"].max().reset_index()
-    latest_df = latest_df[latest_df["Date"] >= yesterday]
-    valid_symbols = set(latest_df["Symbol"])
+def train_from_db(engine, n_trees=100, horizon=1, require_yesterday=True):
+    """
+    Load feature frame from DB and call your existing trainer.
+    """
+    df = _load_df_for_training(engine, require_yesterday=require_yesterday)
+    train_models(df, n_trees=n_trees, horizon=horizon)
 
-    df = df[df["Symbol"].isin(valid_symbols)]
+def evaluate_to_csv(engine, horizon=1, require_yesterday=True):
+    """
+    Load feature frame from DB and call your existing evaluator.
+    evaluate_models() saves CSV to logs/rankings/<horizon>/ticker_model_predictions_<date>.csv
+    and returns the DataFrame.
+    """
+    df = _load_df_for_training(engine, require_yesterday=require_yesterday)
+    results_df = evaluate_models(df, horizon=horizon)
+    return results_df
 
-    if df.empty:
-        print(f"[INFO] No symbols with data for yesterday ({yesterday}) found.")
-        return
-
-    print(f"[INFO] Training models for {len(valid_symbols)} symbols with data up to yesterday.")
-
-    # Use patched train_models with GPU support
-    train_models(df, n_trees=n_trees, horizon=horizon, use_gpu=True)
-
-
-
+# ----------------------------
+# Entrypoint to run the pipeline
+# ----------------------------
 if __name__ == "__main__":
-    #create_database_if_not_exists()
-    #create_market_data_table_if_not_exists()
-    #retrieve_data_to_db()
-    train_xgboost_models_from_db(n_trees=200, horizon=1)
+    # 1) Ensure table exists
+    create_market_data_table_if_not_exists()
+
+    # 2) Ingest/refresh data (only new rows)
+    #    While testing, pass a small list like symbols=["AAPL","MSFT","NVDA"]
+    retrieve_data_to_db(start="2015-01-01")
+
+    # 3) Train all models from DB (requires symbols have yesterday's data)
+    engine = create_engine(DATABASE_URL)
+    train_from_db(engine, n_trees=200, horizon=1, require_yesterday=True)
+
+    # 4) Evaluate and save rankings CSV (your strategies code handles the CSV write)
+    rankings = evaluate_to_csv(engine, horizon=1, require_yesterday=True)
+
+    # 5) Print top 10
+    print("\n[TOP 10 RANKINGS]")
+    print(rankings.sort_values("PredictedReturn", ascending=False).head(10).to_string(index=False))
+
