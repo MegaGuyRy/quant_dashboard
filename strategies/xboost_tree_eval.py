@@ -8,10 +8,9 @@ from sklearn.metrics import mean_squared_error, r2_score
 from datetime import datetime, timedelta
 from data.feature_engineering import create_dataframe
 
-def train_models(df, n_trees=100, horizon=1):
+def train_models(df, n_trees=100, horizon=1, use_gpu=False):
     os.makedirs("models", exist_ok=True)
-
-    r2_scores = []  # List to store R^2 values
+    r2_scores = []
 
     for symbol, group in df.groupby("Symbol"):
         group = group.sort_values(by="Date").copy()
@@ -33,14 +32,17 @@ def train_models(df, n_trees=100, horizon=1):
             X_test = X.iloc[split_idx:]
             y_test = y.iloc[split_idx:]
 
-            model = xgb.XGBRegressor(objective='reg:squarederror', n_estimators=n_trees)
+            model = xgb.XGBRegressor(
+                objective='reg:squarederror',
+                n_estimators=n_trees,
+                tree_method='gpu_hist' if use_gpu else 'auto'
+            )
             model.fit(X_train, y_train)
 
-            # Calculate R^2 score on the test set
             y_pred = model.predict(X_test)
             r2 = r2_score(y_test, y_pred)
             r2_scores.append(r2)
-            
+
             os.makedirs(f"models/{horizon}", exist_ok=True)
             model_path = f"models/{horizon}/model_{symbol}.joblib"
             joblib.dump(model, model_path)
@@ -49,12 +51,12 @@ def train_models(df, n_trees=100, horizon=1):
         except Exception as e:
             print(f"[FAILED] {symbol}: {e}")
 
-    # Print average R^2 across all trained models
     if r2_scores:
         avg_r2 = sum(r2_scores) / len(r2_scores)
         print(f"\n[SUMMARY] Average R^2 Score across {len(r2_scores)} models: {avg_r2:.4f}")
     else:
         print("\n[SUMMARY] No models trained successfully.")
+
 
 def evaluate_models(df, horizon=1):
     # Create empty DataFrame with the correct columns

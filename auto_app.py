@@ -1,4 +1,5 @@
 import sqlalchemy
+from datetime import datetime, timedelta
 from sqlalchemy import create_engine, text
 import pandas as pd
 from datetime import datetime
@@ -8,6 +9,7 @@ import psycopg2
 import os
 from dotenv import load_dotenv
 from init_db import create_database_if_not_exists
+from strategies.xboost_tree_eval import train_models, evaluate_models
 
 # Load environment variables
 load_dotenv()
@@ -69,10 +71,11 @@ def create_market_data_table_if_not_exists():
 
 def retrieve_data_to_db():
     """
-    Downloads and inserts data into PostgreSQL (only new dates).
+    Downloads and inserts only *new* data for each symbol into PostgreSQL.
+    Optimized to avoid redundant downloads and DB connections.
     """
     symbols = get_sp500_symbols()
-    #symbols = ["AAPL"]  # keep short for testing
+    today = datetime.now().strftime("%Y-%m-%d")
     engine = create_engine(DATABASE_URL)
 
     dtype_map = {
@@ -101,12 +104,34 @@ def retrieve_data_to_db():
         "dollar_volume": sqlalchemy.Float,
         "Symbol": sqlalchemy.Text
     }
-    today = datetime.now().strftime("%Y-%m-%d")
-    with engine.connect() as conn:
+
+    # Open single connection for all operations
+    with engine.begin() as connection:
+        # STEP 1: Get latest available dates per symbol from the DB
+        latest_dates_query = """
+            SELECT "Symbol", MAX("Date") AS last_date
+            FROM public.market_data
+            GROUP BY "Symbol"
+        """
+        latest_df = pd.read_sql(latest_dates_query, connection)
+        latest_map = dict(zip(latest_df["Symbol"], latest_df["last_date"]))
+
         for symbol in symbols:
             try:
-                print(f"[INFO] Pulling data for {symbol}")
-                df = get_historical_data(symbol, start="2024-01-01", end=today, interval="1d", auto_adjust=False)
+                # STEP 2: Use latest DB date as the start for new download
+                start_date = latest_map.get(symbol, "2015-01-01")
+                start_date = pd.to_datetime(start_date) + pd.Timedelta(days=1)
+
+                if start_date >= pd.to_datetime(today):
+                    print(f"[SKIP] {symbol}: Already up-to-date.")
+                    continue
+
+                print(f"[INFO] Pulling data for {symbol} from {start_date.date()} to {today}")
+                df = get_historical_data(symbol, start=start_date.strftime("%Y-%m-%d"), end=today, interval="1d", auto_adjust=False)
+                if df.empty:
+                    print(f"[INFO] {symbol}: No new data returned by Yahoo.")
+                    continue
+
                 df = compute_return_features(df)
                 df["Symbol"] = symbol
 
@@ -114,6 +139,7 @@ def retrieve_data_to_db():
                     df.columns = df.columns.droplevel(1)
 
                 df.reset_index(inplace=True)
+                df["Date"] = pd.to_datetime(df["Date"]).dt.date
 
                 df = df[[
                     "Date", "Close", "High", "Low", "Open", "Volume",
@@ -122,53 +148,68 @@ def retrieve_data_to_db():
                     "rsi_14", "vol_5", "vol_10", "gk_vol", "bollinger_b",
                     "atr", "macd", "macd_signal", "dollar_volume", "Symbol"
                 ]]
-                df["Date"] = pd.to_datetime(df["Date"]).dt.date  
 
-                existing_dates_query = text("""
-                    SELECT "Date" FROM public.market_data WHERE "Symbol" = :symbol
-                """)
-                existing_dates = pd.read_sql(existing_dates_query, conn, params={"symbol": symbol})
-
-                before = len(df)
-                if not existing_dates.empty:
-                    df = df[~df["Date"].isin(existing_dates["Date"])]
-                after = len(df)
-
-                print(f"[DEBUG] {symbol}: Filtered {before - after} rows. Remaining: {after}")
-                print("[DEBUG] Final DataFrame to insert:")
-                print(df.head(3))
-
+                # STEP 3: Insert only if there is new data
                 if not df.empty:
-                    try:
-                        with engine.begin() as connection:
-                            df.to_sql(
-                                "market_data",
-                                con=connection,
-                                schema="public",
-                                if_exists="append",
-                                index=False,
-                                method="multi",
-                                dtype=dtype_map
-                            )
-                        print(f"[INFO] Inserted {len(df)} new rows for {symbol}")
-                    except Exception as db_error:
-                        print(f"[ERROR] Insert failed: {db_error}")
-                        print("[DEBUG] Data types:")
-                        print(df.dtypes)
-                        print("[DEBUG] Rows sample:")
-                        print(df.head())
+                    df.to_sql(
+                        "market_data",
+                        con=connection,
+                        schema="public",
+                        if_exists="append",
+                        index=False,
+                        method="multi",
+                        dtype=dtype_map
+                    )
+                    print(f"[INSERTED] {symbol}: {len(df)} new rows")
                 else:
-                    print(f"[INFO] No new data for {symbol}")
+                    print(f"[SKIP] {symbol}: No new rows to insert")
 
             except Exception as e:
-                print(f"[WARNING] Failed to process {symbol}: {e}")
-                
+                print(f"[ERROR] {symbol}: {e}")
 
+
+def train_xgboost_models_from_db(n_trees=100, horizon=1):
+    """
+    Pulls symbol data from the DB, filters out those not updated to yesterday,
+    and trains a separate XGBoost model per symbol using GPU.
+    """
+    engine = create_engine(DATABASE_URL)
+    yesterday = (datetime.now() - timedelta(days=1)).date()
+
+    query = """
+        SELECT * FROM public.market_data
+        WHERE "Date" IS NOT NULL AND "Symbol" IS NOT NULL
+        ORDER BY "Symbol", "Date"
+    """
+    df = pd.read_sql(query, engine)
+
+    if df.empty:
+        print("[WARNING] No data found in database.")
+        return
+
+    df.dropna(inplace=True)
+    df["Date"] = pd.to_datetime(df["Date"]).dt.date
+
+    # Only keep symbols that have data for yesterday
+    latest_df = df.groupby("Symbol")["Date"].max().reset_index()
+    latest_df = latest_df[latest_df["Date"] >= yesterday]
+    valid_symbols = set(latest_df["Symbol"])
+
+    df = df[df["Symbol"].isin(valid_symbols)]
+
+    if df.empty:
+        print(f"[INFO] No symbols with data for yesterday ({yesterday}) found.")
+        return
+
+    print(f"[INFO] Training models for {len(valid_symbols)} symbols with data up to yesterday.")
+
+    # Use patched train_models with GPU support
+    train_models(df, n_trees=n_trees, horizon=horizon, use_gpu=True)
 
 
 
 if __name__ == "__main__":
-    create_database_if_not_exists()
-    create_market_data_table_if_not_exists()
-    retrieve_data_to_db()
-
+    #create_database_if_not_exists()
+    #create_market_data_table_if_not_exists()
+    #retrieve_data_to_db()
+    train_xgboost_models_from_db(n_trees=200, horizon=1)
